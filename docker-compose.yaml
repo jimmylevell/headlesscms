@@ -1,22 +1,5 @@
 version: '3'
 services:
-  directus-database:
-    image: postgis/postgis:13-master
-    networks:
-      - directus
-      - traefik-public
-    environment:
-      POSTGRES_USER: 'directus'
-      POSTGRES_PASSWORD: 'directus'
-      POSTGRES_DB: 'directus'
-    deploy:
-      replicas: 1
-      update_config:
-        parallelism: 1
-        delay: 10s
-      restart_policy:
-        condition: on-failure
-
   directus-cache:
     image: redis:6
     networks:
@@ -30,31 +13,39 @@ services:
         condition: on-failure
 
   directus:
-    image: directus/directus:latest
+    image: ghcr.io/jimmylevell/headlesscms/directus:latest
     networks:
       - directus
+      - levell
+      - traefik-public
     depends_on:
-      - cache
-      - database
+      - directus-cache
     environment:
-      KEY: '255d861b-5ea1-5996-9aa3-922530ec40b1'
-      SECRET: '6116487b-cda1-52c2-b5b5-c8022c45e263'
+      KEY: DOCKER-SECRET->KEY_DIRECTUS
+      SECRET: DOCKER-SECRET->SECRET_DIRECTUS
 
       DB_CLIENT: 'pg'
-      DB_HOST: 'directus-database'
+      DB_HOST: 'levell-postgres'
       DB_PORT: '5432'
-      DB_DATABASE: 'directus'
-      DB_USER: 'directus'
-      DB_PASSWORD: 'directus'
+      DB_DATABASE: 'directus_database'
+      DB_USER: DOCKER-SECRET->DATABASE_USER_DIRECTUS
+      DB_PASSWORD: DOCKER-SECRET->DATABASE_PASSWORD_DIRECTUS
 
       CACHE_ENABLED: 'true'
       CACHE_STORE: 'redis'
       CACHE_REDIS: 'redis://directus-cache:6379'
 
-      ADMIN_EMAIL: 'admin@levell.ch'
-      ADMIN_PASSWORD: 'password'
+      ADMIN_EMAIL: DOCKER-SECRET->ADMIN_EMAIL_DIRECTUS
+      ADMIN_PASSWORD: DOCKER-SECRET->ADMIN_PASSWORD_DIRECTUS
 
       PUBLIC_URL: 'https://directus.app.levell.ch'
+    secrets: 
+      - DATABASE_USER_DIRECTUS
+      - DATABASE_PASSWORD_DIRECTUS
+      - KEY_DIRECTUS
+      - SECRET_DIRECTUS
+      - ADMIN_EMAIL_DIRECTUS
+      - ADMIN_PASSWORD_DIRECTUS
     deploy:
       replicas: 1
       update_config:
@@ -74,9 +65,25 @@ services:
         - traefik.http.routers.directus-secured.rule=Host(`directus.app.levell.ch`) # listen to port 443 for request to APP_DOMAIN (use together with the line below)
         - traefik.http.routers.directus-secured.entrypoints=https
         - traefik.http.routers.directus-secured.tls.certresolver=le # use the Let's Encrypt certificate we set up earlier
-        - traefik.http.services.strapi-secured.loadbalancer.server.port=8055 # ask Traefik to search for port of the service container
+        - traefik.http.services.directus-secured.loadbalancer.server.port=8055 # ask Traefik to search for port of the service container
 
 networks:
   directus:
   traefik-public:
+    external: true
+  levell:
+    external: true
+
+secrets: 
+  DATABASE_USER_DIRECTUS:
+    external: true
+  DATABASE_PASSWORD_DIRECTUS:
+    external: true
+  KEY_DIRECTUS:
+    external: true
+  SECRET_DIRECTUS:
+    external: true
+  ADMIN_EMAIL_DIRECTUS:
+    external: true
+  ADMIN_PASSWORD_DIRECTUS:
     external: true
